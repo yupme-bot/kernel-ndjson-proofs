@@ -33,3 +33,5 @@ This demo visualizes event capture, stalls, gaps, and recovery in real time.
 
 Important: The demo is illustrative only.
 The authoritative proof artifacts are the NDJSON files in this repository, which can be independently verified offline.
+
+Runs in the browser using the deterministic kernel, with persistence via IndexedDB and real-time visualization. No server-side mutation of events.
