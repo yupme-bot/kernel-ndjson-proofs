@@ -1,4 +1,5 @@
-Kernel v1.1 NDJSON Proof Artifacts
+Kernel v1.1 — Historical NDJSON Proof Artifacts
+
 
 This repository contains two NDJSON exports produced by Kernel v1.1.
 
