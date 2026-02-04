@@ -30,14 +30,13 @@ These artifacts were produced by Kernel v1.1 and are preserved for historical an
 The current, authoritative verification model is Kernel v1.2 with capture-time hashing and the Guardian Auditor / Proof Lab. These files do not reflect the full v1.2 integrity guarantees.
 
 
-Live Demonstration (Non-Authoritative)
+Exploratory Demonstration (Historical)
 
-A live, browser-based demonstration of the deterministic event kernel is available here:
+An early, browser-based exploratory demonstration used during the development of the deterministic event kernel is available here:
 https://deterministic-stream-demo1.pages.dev/
 
-This demo visualizes event capture, stalls, gaps, and recovery in real time.
+This demo visualizes event ingestion, stalls, gaps, and recovery behavior in real time and was used to explore design trade-offs during the v1.1 era.
 
-Important: The demo is illustrative only.
-The authoritative proof artifacts are the NDJSON files in this repository, which can be independently verified offline.
+Important: This demo is illustrative and historical only. It predates the Kernel v1.2 capture-time hashing model and the Guardian Auditor / Proof Lab. The NDJSON files in this repository reflect the v1.1 model and are preserved for historical reference, not as current authoritative proof artifacts.
 
-Runs in the browser using the deterministic kernel, with persistence via IndexedDB and real-time visualization. No server-side mutation of events.
+The demo runs entirely in the browser using IndexedDB for persistence and performs no server-side mutation.
