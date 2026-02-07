@@ -1,42 +1,190 @@
-Kernel v1.1 — Historical NDJSON Proof Artifacts
+# Kernel NDJSON Proofs — v1.1 and v1.2
 
+This repository contains **deterministic NDJSON evidence exports** produced by the Guardian Kernel under two versions of the system.
 
-This repository contains two NDJSON exports produced by Kernel v1.1.
+The goal of these artifacts is to demonstrate:
 
-Files
+* deterministic ordering
+* tamper-evident chaining
+* explicit handling of missing data
+* stable verification outcomes (VALID vs PARTIAL)
 
-kernel-v1.1-clean.ndjson
-A normal run demonstrating deterministic ordering with no gaps.
+This repository contains **outputs only**.
+No kernel source code or internal tooling is included.
 
-kernel-v1.1-forced-gap.ndjson
-A run where one persisted segment was intentionally removed before export.
-The kernel emits an explicit gap record and continues exporting without crashing or silently truncating data.
+---
 
-What this demonstrates
+## What this demonstrates
 
-Deterministic event ordering
+Across both versions, these files show that:
 
-Segmented capture and export
+* events are recorded in a deterministic order
+* records are cryptographically chained
+* missing data cannot be hidden
+* partial data can still be verified safely
+* verification results are repeatable and deterministic
 
-Explicit, first-class gap markers (no silent data loss)
+---
 
-Successful continuation after missing data
+## Contents
 
-These files were intended to be audited directly as independent evidence under the v1.1 model.
+### Kernel v1.1 examples
 
-Status
-These artifacts were produced by Kernel v1.1 and are preserved for historical and educational purposes.
+* `kernel_v1_1_clean.ndjson`
+* `kernel_v1_1_forced_gap.ndjson`
 
-The current, authoritative verification model is Kernel v1.2 with capture-time hashing and the Guardian Auditor / Proof Lab. These files do not reflect the full v1.2 integrity guarantees.
+**Clean**
 
+* all segments present
+* deterministic ordering
+* verification result: **VALID**
 
-Exploratory Demonstration (Historical)
+**Forced gap**
 
-An early, browser-based exploratory demonstration used during the development of the deterministic event kernel is available here:
-https://deterministic-stream-demo1.pages.dev/
+* one persisted segment is missing
+* the exporter emits an explicit GAP marker
+* export continues after the gap
+* verification result: **PARTIAL**
 
-This demo visualizes event ingestion, stalls, gaps, and recovery behavior in real time and was used to explore design trade-offs during the v1.1 era.
+This demonstrates that missing data is **explicitly detectable**, not silently ignored.
 
-Important: This demo is illustrative and historical only. It predates the Kernel v1.2 capture-time hashing model and the Guardian Auditor / Proof Lab. The NDJSON files in this repository reflect the v1.1 model and are preserved for historical reference, not as current authoritative proof artifacts.
+---
 
-The demo runs entirely in the browser using IndexedDB for persistence and performs no server-side mutation.
+### Kernel v1.2 examples
+
+* `kernel_v1_2_clean.ndjson`
+* `kernel_v1_2_forced_gap.ndjson`
+
+These demonstrate the same **clean vs missing-data scenario**, under the newer Kernel v1.2 persistence model.
+
+Key characteristics of v1.2:
+
+* persistence segments are first-class evidence units
+* segments are sealed and chained independently
+* missing data is represented as an **absent sealed segment range**
+* GAPs are expressed structurally (via segment boundaries and gap records)
+* the system transitions through degraded → recovered states
+* no data is fabricated to fill gaps
+
+**Clean**
+
+* no gaps detected
+* verification result: **PARTIAL (MISSING_SEAL)**
+
+**Forced gap**
+
+* one or more segment ranges are missing
+* explicit gap records describe the missing ranges
+* later segments remain verifiable
+* verification result: **PARTIAL**
+
+---
+
+## Why v1.2 results are PARTIAL
+
+The v1.2 examples in this repository are **stress artifacts**.
+They intentionally omit a terminal `seal` record.
+
+A `seal` indicates a formally closed run. When present:
+
+* clean runs verify as **VALID**
+* runs with gaps verify as **PARTIAL**
+
+When absent:
+
+* verification reports **PARTIAL: MISSING_SEAL**
+
+This is expected behavior and does **not** indicate corruption or invalid data.
+
+---
+
+## Are these the same test?
+
+They represent the **same scenario**, not identical mechanics.
+
+* v1.1 demonstrates missing data at **export time**
+* v1.2 demonstrates missing data at **capture / persistence time**
+
+In both versions:
+
+* deterministic ordering is preserved
+* missing data is explicitly detectable
+* verifiers can distinguish VALID vs PARTIAL outcomes
+
+This reflects an **evolution in representation**, not a change in guarantees.
+
+---
+
+## Independent verification
+
+These NDJSON files are intended to be independently verifiable.
+
+You can verify them using the open-source NDJSON chain verifier:
+
+[https://github.com/yupme-bot/ndjson-chain-verifier](https://github.com/yupme-bot/ndjson-chain-verifier)
+
+### Verifying the v1.2 examples
+
+Because the v1.2 artifacts omit a terminal seal, verification should be run in **allow-partial** mode.
+
+Example (Node):
+
+```bash
+node --input-type=module -e "
+import { verifyNdjsonStream } from './src/index.js';
+const r = await verifyNdjsonStream('kernel_v1_2_clean.ndjson', { allowPartial: true });
+console.log(r.status, r.reason_code, 'segments='+r.segments, 'gaps='+r.gaps);
+"
+```
+
+```bash
+node --input-type=module -e "
+import { verifyNdjsonStream } from './src/index.js';
+const r = await verifyNdjsonStream('kernel_v1_2_forced_gap.ndjson', { allowPartial: true });
+console.log(r.status, r.reason_code, 'segments='+r.segments, 'gaps='+r.gaps);
+"
+```
+
+Expected results:
+
+| File                            | Expected outcome        |
+| ------------------------------- | ----------------------- |
+| `kernel_v1_2_clean.ndjson`      | `PARTIAL: MISSING_SEAL` |
+| `kernel_v1_2_forced_gap.ndjson` | `PARTIAL` (gaps > 0)    |
+
+---
+
+## What this repository does NOT include
+
+This repository does **not** include:
+
+* kernel implementation code
+* persistence or recovery logic
+* fault-injection tooling
+* signing, anchoring, or timestamping mechanisms
+* instructions for generating new logs
+
+Only exported evidence artifacts are provided.
+
+---
+
+## Intended audience
+
+These examples are intended for:
+
+* auditors and reviewers
+* regulators and compliance teams
+* engineers evaluating verification semantics
+
+They are not intended as a usage guide for operating the Kernel.
+
+---
+
+## Summary
+
+Kernel v1.1 and v1.2 both produce deterministic, tamper-evident NDJSON exports.
+
+Kernel v1.2 improves how missing data is represented and proven,
+while preserving the same verification guarantees.
+
+These files show that evolution clearly and verifiably.
