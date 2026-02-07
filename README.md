@@ -1,190 +1,174 @@
-# Kernel NDJSON Proofs — v1.1 and v1.2
+# Kernel NDJSON Proofs
 
-This repository contains **deterministic NDJSON evidence exports** produced by the Guardian Kernel under two versions of the system.
-
-The goal of these artifacts is to demonstrate:
-
-* deterministic ordering
-* tamper-evident chaining
-* explicit handling of missing data
-* stable verification outcomes (VALID vs PARTIAL)
-
-This repository contains **outputs only**.
-No kernel source code or internal tooling is included.
+**Deterministic audit-log export artifacts with explicit gap semantics**
 
 ---
 
-## What this demonstrates
+## What this is (please read first)
 
-Across both versions, these files show that:
+**NDJSON-GAP is NOT a complete audit system.**
 
-* events are recorded in a deterministic order
-* records are cryptographically chained
-* missing data cannot be hidden
-* partial data can still be verified safely
-* verification results are repeatable and deterministic
+It is a **narrow, single-purpose component** designed to solve one specific problem:
 
----
+> **Preventing silent data loss in audit log exports by making absence explicit and verifiable.**
 
-## Contents
-
-### Kernel v1.1 examples
-
-* `kernel_v1_1_clean.ndjson`
-* `kernel_v1_1_forced_gap.ndjson`
-
-**Clean**
-
-* all segments present
-* deterministic ordering
-* verification result: **VALID**
-
-**Forced gap**
-
-* one persisted segment is missing
-* the exporter emits an explicit GAP marker
-* export continues after the gap
-* verification result: **PARTIAL**
-
-This demonstrates that missing data is **explicitly detectable**, not silently ignored.
+This repository contains **example NDJSON artifacts and a verifier** that demonstrate how audit logs can be exported such that missing data cannot be silently erased, ignored, or disguised as failure.
 
 ---
 
-### Kernel v1.2 examples
+## What problem this addresses
 
-* `kernel_v1_2_clean.ndjson`
-* `kernel_v1_2_forced_gap.ndjson`
+In real systems, audit logs are often:
 
-These demonstrate the same **clean vs missing-data scenario**, under the newer Kernel v1.2 persistence model.
+* truncated due to storage failures
+* partially exported due to retention limits
+* incomplete due to crashes or outages
+* transferred across trust boundaries
 
-Key characteristics of v1.2:
+Most audit verification systems treat missing data as a binary failure:
 
-* persistence segments are first-class evidence units
-* segments are sealed and chained independently
-* missing data is represented as an **absent sealed segment range**
-* GAPs are expressed structurally (via segment boundaries and gap records)
-* the system transitions through degraded → recovered states
-* no data is fabricated to fill gaps
+* one missing segment → entire log is unusable
 
-**Clean**
+NDJSON-GAP explores an alternative:
 
-* no gaps detected
-* verification result: **PARTIAL (MISSING_SEAL)**
-
-**Forced gap**
-
-* one or more segment ranges are missing
-* explicit gap records describe the missing ranges
-* later segments remain verifiable
-* verification result: **PARTIAL**
+> **Incomplete audit artifacts can still carry useful, verifiable evidence if absence is made explicit.**
 
 ---
 
-## Why v1.2 results are PARTIAL
+## What this does
 
-The v1.2 examples in this repository are **stress artifacts**.
-They intentionally omit a terminal `seal` record.
+This format + verifier provides:
 
-A `seal` indicates a formally closed run. When present:
+* Deterministic ordering verification
+* Cryptographic hash chaining (integrity only, not authenticity)
+* Explicit representation of missing data ("gaps")
+* Stable verification outcomes:
 
-* clean runs verify as **VALID**
-* runs with gaps verify as **PARTIAL**
+  * **VALID** — integrity and completeness hold
+  * **PARTIAL** — integrity holds, completeness does not
+  * **INVALID** — integrity is broken
 
-When absent:
-
-* verification reports **PARTIAL: MISSING_SEAL**
-
-This is expected behavior and does **not** indicate corruption or invalid data.
-
----
-
-## Are these the same test?
-
-They represent the **same scenario**, not identical mechanics.
-
-* v1.1 demonstrates missing data at **export time**
-* v1.2 demonstrates missing data at **capture / persistence time**
-
-In both versions:
-
-* deterministic ordering is preserved
-* missing data is explicitly detectable
-* verifiers can distinguish VALID vs PARTIAL outcomes
-
-This reflects an **evolution in representation**, not a change in guarantees.
+**Key idea:**
+Integrity and completeness are separate properties and should be evaluated independently.
 
 ---
 
-## Independent verification
+## What this does NOT do (non-goals)
 
-These NDJSON files are intended to be independently verifiable.
+This project intentionally does **not** provide:
 
-You can verify them using the open-source NDJSON chain verifier:
+* ❌ Trusted timestamps or temporal anchoring
+* ❌ Digital signatures or identity/authenticity guarantees
+* ❌ Access control or key management
+* ❌ Event capture SDKs or log collection agents
+* ❌ Real-time streaming, analytics, or dashboards
+* ❌ Compliance certification (SOC 2, HIPAA, PCI-DSS, etc.)
 
-[https://github.com/yupme-bot/ndjson-chain-verifier](https://github.com/yupme-bot/ndjson-chain-verifier)
+These concerns are **explicitly out of scope** and are expected to be handled by external systems.
 
-### Verifying the v1.2 examples
+---
 
-Because the v1.2 artifacts omit a terminal seal, verification should be run in **allow-partial** mode.
+## How this fits into a real workflow
 
-Example (Node):
+NDJSON-GAP is designed to **compose with existing audit infrastructure**, not replace it.
 
-```bash
-node --input-type=module -e "
-import { verifyNdjsonStream } from './src/index.js';
-const r = await verifyNdjsonStream('kernel_v1_2_clean.ndjson', { allowPartial: true });
-console.log(r.status, r.reason_code, 'segments='+r.segments, 'gaps='+r.gaps);
-"
+Example composition:
+
+```
+[Log Source]
+      ↓
+[NDJSON-GAP Export]
+      ↓
+[External Signature / PKI]
+      ↓
+[External Timestamp (RFC 3161, etc.)]
+      ↓
+[Archive / Transfer]
+      ↓
+[Auditor]
+      ↓
+[Verify signature → verify timestamp → verify NDJSON-GAP]
 ```
 
-```bash
-node --input-type=module -e "
-import { verifyNdjsonStream } from './src/index.js';
-const r = await verifyNdjsonStream('kernel_v1_2_forced_gap.ndjson', { allowPartial: true });
-console.log(r.status, r.reason_code, 'segments='+r.segments, 'gaps='+r.gaps);
-"
-```
+This layer answers **one question only**:
 
-Expected results:
-
-| File                            | Expected outcome        |
-| ------------------------------- | ----------------------- |
-| `kernel_v1_2_clean.ndjson`      | `PARTIAL: MISSING_SEAL` |
-| `kernel_v1_2_forced_gap.ndjson` | `PARTIAL` (gaps > 0)    |
+> **“Do these bytes truthfully represent what data is present and absent?”**
 
 ---
 
-## What this repository does NOT include
+## Why “PARTIAL” exists
 
-This repository does **not** include:
+Traditional audit verification collapses to **all-or-nothing**:
 
-* kernel implementation code
-* persistence or recovery logic
-* fault-injection tooling
-* signing, anchoring, or timestamping mechanisms
-* instructions for generating new logs
+* any missing data → total failure
 
-Only exported evidence artifacts are provided.
+NDJSON-GAP introduces **PARTIAL** as a first-class, stable outcome:
+
+* Integrity is preserved
+* Absence is explicit and enumerable
+* Auditors can reason about *what is missing* rather than losing all signal
+
+Whether PARTIAL is acceptable is a **policy decision**, not a technical one.
+
+---
+
+## What’s in this repository
+
+This repository intentionally contains **artifacts only**:
+
+* Clean audit exports
+* Forced-gap exports (intentional missing data)
+* Verifier output demonstrating VALID / PARTIAL / INVALID states
+
+No capture code, production kernel, or ingestion tooling is included here.
+
+---
+
+## Verification
+
+Artifacts can be independently verified using the included verifier or compatible tools.
+
+Verification checks:
+
+* record ordering
+* hash chain integrity
+* gap representation
+* terminal seal presence (if applicable)
+
+Verification is deterministic: the same input always yields the same result.
+
+---
+
+## Scope note (important)
+
+**Note on Scope — Feb 2026**
+
+Earlier versions of this repository were presented more broadly than warranted.
+Based on community feedback, this project has been explicitly refocused as:
+
+> **A gap-aware audit export format and verifier — not a complete audit system.**
+
+This change reflects improved clarity of intent, not a change in technical guarantees.
 
 ---
 
 ## Intended audience
 
-These examples are intended for:
+This project is intended for:
 
 * auditors and reviewers
-* regulators and compliance teams
-* engineers evaluating verification semantics
+* compliance and security engineers
+* infrastructure engineers
+* researchers examining audit failure modes
 
-They are not intended as a usage guide for operating the Kernel.
+It is **not** intended as an end-user logging or observability product.
 
 ---
 
 ## Summary
 
-Kernel v1.1 and v1.2 both produce deterministic, tamper-evident NDJSON exports.
+NDJSON-GAP explores one narrow idea:
 
-Kernel v1.2 improves how missing data is represented and proven,
-while preserving the same verification guarantees.
+> **In audit contexts, explicit and verifiable absence is often more useful than silent failure or total invalidation.**
 
-These files show that evolution clearly and verifiably.
+Everything else is intentionally delegated to composable, external systems.
